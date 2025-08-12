@@ -1,0 +1,71 @@
+// FlatBuffers schema for wflDB wire protocol messages
+
+namespace wfldb.protocol;
+
+// Request types
+enum RequestType : byte {
+    GET = 0,
+    PUT = 1,
+    DELETE = 2,
+    SCAN = 3,
+    BATCH = 4
+}
+
+// Response status codes  
+enum Status : byte {
+    OK = 0,
+    NOT_FOUND = 1,
+    ERROR = 2,
+    UNAUTHORIZED = 3
+}
+
+// Common request header
+table RequestHeader {
+    request_id: string;
+    bucket: string;
+    key: string;
+    request_type: RequestType;
+    timestamp: uint64;
+    nonce: string;
+    content_length: uint64;
+    content_hash: [ubyte];
+}
+
+// Response header
+table ResponseHeader {
+    request_id: string;
+    status: Status;
+    error_message: string;
+    content_length: uint64;
+    content_hash: [ubyte];
+    version: string;
+    is_chunked: bool;
+}
+
+// Scan request parameters
+table ScanParams {
+    prefix: string;
+    limit: uint32;
+    start_key: string;
+}
+
+// Batch operation
+table BatchOperation {
+    operation_type: RequestType;
+    key: string;
+    content_length: uint32;
+}
+
+table BatchRequest {
+    operations: [BatchOperation];
+}
+
+// Key packet for authentication (simplified)
+table KeyPacket {
+    public_key: [ubyte];
+    issuer: string;
+    expires_at: uint64;
+    permissions: [string];
+}
+
+root_type RequestHeader;
