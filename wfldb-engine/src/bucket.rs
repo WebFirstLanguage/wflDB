@@ -9,7 +9,7 @@ use crate::StorageEngine;
 /// Bucket represents a multi-tenant boundary
 pub struct Bucket {
     id: BucketId,
-    main_partition: Arc<Partition>,
+    pub(crate) main_partition: Arc<Partition>,
     engine: StorageEngine,
 }
 
@@ -85,15 +85,32 @@ impl Bucket {
         let mut total_size = 0u64;
         let chunk_size = chunks.first().map(|c| c.len() as u32).unwrap_or(0);
         
-        // Store each chunk in the value log using content-addressing
+        // Store each chunk in the value log using content-addressing with deduplication
         for chunk in chunks {
             let chunk_hash = ContentHash::new(&chunk);
             let chunk_key = self.chunk_key(&chunk_hash);
+            let ref_key = self.chunk_ref_key(&chunk_hash);
             
-            // Store chunk
-            self.main_partition
-                .insert(&chunk_key, &chunk)
+            // Check if chunk already exists
+            let existing_ref = self.main_partition.get(&ref_key)
                 .map_err(|e| WflDBError::Storage(e.to_string()))?;
+            
+            if let Some(ref_data) = existing_ref {
+                // Chunk exists, increment reference count
+                let ref_count = u32::from_le_bytes(ref_data[0..4].try_into().unwrap());
+                let new_ref_count = ref_count + 1;
+                self.main_partition
+                    .insert(&ref_key, &new_ref_count.to_le_bytes())
+                    .map_err(|e| WflDBError::Storage(e.to_string()))?;
+            } else {
+                // New chunk, store it with reference count of 1
+                self.main_partition
+                    .insert(&chunk_key, &chunk)
+                    .map_err(|e| WflDBError::Storage(e.to_string()))?;
+                self.main_partition
+                    .insert(&ref_key, &1u32.to_le_bytes())
+                    .map_err(|e| WflDBError::Storage(e.to_string()))?;
+            }
             
             chunk_hashes.push(chunk_hash);
             total_size += chunk.len() as u64;
@@ -150,10 +167,29 @@ impl Bucket {
             let _ = self.main_partition.remove(&self.metadata_key(key));
             let _ = self.main_partition.remove(&self.data_key(key));
             
-            // If chunked, remove chunks (simplified - real implementation needs GC)
+            // If chunked, decrement reference counts and remove unreferenced chunks
             if let Some(manifest) = metadata.chunk_manifest {
                 for chunk_hash in manifest.chunks {
-                    let _ = self.main_partition.remove(&self.chunk_key(&chunk_hash));
+                    let ref_key = self.chunk_ref_key(&chunk_hash);
+                    
+                    // Get current reference count
+                    if let Some(ref_data) = self.main_partition.get(&ref_key)
+                        .map_err(|e| WflDBError::Storage(e.to_string()))? {
+                        
+                        let ref_count = u32::from_le_bytes(ref_data[0..4].try_into().unwrap());
+                        
+                        if ref_count > 1 {
+                            // Decrement reference count
+                            let new_ref_count = ref_count - 1;
+                            self.main_partition
+                                .insert(&ref_key, &new_ref_count.to_le_bytes())
+                                .map_err(|e| WflDBError::Storage(e.to_string()))?;
+                        } else {
+                            // Last reference, remove chunk and reference count
+                            let _ = self.main_partition.remove(&self.chunk_key(&chunk_hash));
+                            let _ = self.main_partition.remove(&ref_key);
+                        }
+                    }
                 }
             }
         }
@@ -162,23 +198,41 @@ impl Bucket {
         Ok(())
     }
     
-    /// Scan keys with prefix (simplified implementation)
+    /// Scan keys with prefix
     pub fn scan_prefix(&self, prefix: &str, limit: Option<usize>) -> Result<Vec<Key>> {
-        let prefix_key = format!("meta:{}", prefix);
+        let prefix_bytes = format!("meta:{}", prefix).into_bytes();
         let mut keys = Vec::new();
+        let max_results = limit.unwrap_or(usize::MAX);
         
-        // Simple scan implementation - in real version would use proper iterator
-        for i in 0..limit.unwrap_or(1000) {
-            let test_key = format!("{}{}", prefix_key, i);
-            if self.main_partition.get(&test_key.as_bytes()).unwrap().is_some() {
-                if let Some(actual_key) = test_key.strip_prefix("meta:") {
-                    if let Ok(key) = Key::new(actual_key) {
-                        keys.push(key);
+        // Use fjall's range iterator for efficient prefix scanning
+        let iter = self.main_partition.range(prefix_bytes.clone()..);
+        
+        for item in iter {
+            match item {
+                Ok((key_bytes, _value)) => {
+                    // Check if key still has our prefix
+                    if !key_bytes.starts_with(&prefix_bytes) {
+                        break; // We've gone past the prefix range
+                    }
+                    
+                    // Extract the actual key from the metadata key
+                    if let Ok(key_str) = std::str::from_utf8(&key_bytes) {
+                        if let Some(actual_key) = key_str.strip_prefix("meta:") {
+                            if let Ok(key) = Key::new(actual_key) {
+                                // Check if the actual key has the requested prefix
+                                if key.has_prefix(prefix) {
+                                    keys.push(key);
+                                    if keys.len() >= max_results {
+                                        break;
+                                    }
+                                }
+                            }
+                        }
                     }
                 }
-            }
-            if keys.len() >= limit.unwrap_or(1000) {
-                break;
+                Err(e) => {
+                    return Err(WflDBError::Storage(format!("Scan error: {}", e)));
+                }
             }
         }
         
@@ -196,6 +250,10 @@ impl Bucket {
     
     fn chunk_key(&self, hash: &ContentHash) -> Vec<u8> {
         format!("chunk:{}", hash.to_hex()).into_bytes()
+    }
+    
+    fn chunk_ref_key(&self, hash: &ContentHash) -> Vec<u8> {
+        format!("chunkref:{}", hash.to_hex()).into_bytes()
     }
 }
 

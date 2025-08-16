@@ -15,3 +15,6 @@ blake3 = { workspace = true }
 [dev-dependencies]
 rand = "0.8"
 tokio = { workspace = true, features = ["rt", "time"] }
+proptest = { workspace = true }
+wfldb-engine = { path = "../wfldb-engine", features = ["test-utils"] }
+tempfile = { workspace = true }

@@ -2,6 +2,7 @@
 
 use wfldb_core::*;
 use crate::{StorageEngine, Bucket};
+use serde_json;
 
 /// High-level storage interface
 pub struct Storage {
@@ -60,6 +61,61 @@ impl Storage {
     pub fn list_objects(&self, bucket_id: &BucketId, prefix: &str, limit: Option<usize>) -> Result<Vec<Key>> {
         let bucket = self.engine.bucket(bucket_id)?;
         bucket.scan_prefix(prefix, limit)
+    }
+    
+    /// Execute batch operations atomically
+    pub fn batch(&self, bucket_id: &BucketId, operations: Vec<BatchOperation>) -> Result<BatchResponse> {
+        let bucket = self.engine.bucket(bucket_id)?;
+        let mut results = Vec::new();
+        
+        // Start atomic batch
+        let mut batch = self.engine.keyspace().batch();
+        
+        for op in operations {
+            match op {
+                BatchOperation::Put { key, data } => {
+                    // Determine if it's small or large
+                    if data.len() <= self.engine.value_threshold() {
+                        // Small object - store inline
+                        let content_hash = ContentHash::new(&data);
+                        let metadata = ObjectMetadata::new_inline(data.len() as u64, content_hash);
+                        
+                        let metadata_key = format!("meta:{}", key.as_str()).into_bytes();
+                        let data_key = format!("data:{}", key.as_str()).into_bytes();
+                        
+                        let metadata_json = serde_json::to_vec(&metadata)
+                            .map_err(WflDBError::Serialization)?;
+                        
+                        batch.insert(&bucket.main_partition, &metadata_key, metadata_json);
+                        batch.insert(&bucket.main_partition, &data_key, data);
+                        
+                        results.push(BatchResult::Success);
+                    } else {
+                        // Large object - for now, fail in batch
+                        results.push(BatchResult::Error(
+                            "Large objects not supported in batch operations yet".to_string()
+                        ));
+                    }
+                }
+                BatchOperation::Delete { key } => {
+                    let metadata_key = format!("meta:{}", key.as_str()).into_bytes();
+                    let data_key = format!("data:{}", key.as_str()).into_bytes();
+                    
+                    batch.remove(&bucket.main_partition, &metadata_key);
+                    batch.remove(&bucket.main_partition, &data_key);
+                    
+                    results.push(BatchResult::Success);
+                }
+            }
+        }
+        
+        // Commit the batch atomically
+        batch.commit()
+            .map_err(|e| WflDBError::Storage(format!("Batch commit failed: {}", e)))?;
+        
+        self.engine.persist()?;
+        
+        Ok(BatchResponse { results })
     }
     
     /// Get storage engine reference

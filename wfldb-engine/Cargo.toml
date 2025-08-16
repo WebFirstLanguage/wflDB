@@ -5,6 +5,9 @@ edition.workspace = true
 authors.workspace = true
 license.workspace = true
 
+[features]
+test-utils = []
+
 [dependencies]
 wfldb-core = { path = "../wfldb-core" }
 fjall = { workspace = true }
@@ -16,3 +19,5 @@ tempfile = { workspace = true }
 [dev-dependencies]
 tempfile = { workspace = true }
 tokio = { workspace = true }
+sha2 = "0.10"
+wfldb-engine = { path = ".", features = ["test-utils"] }

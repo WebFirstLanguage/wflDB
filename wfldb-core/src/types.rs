@@ -204,6 +204,95 @@ impl ObjectMetadata {
 
 // Add hex dependency for ContentHash
 
+/// Batch operation request
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct BatchRequest {
+    pub operations: Vec<BatchOperation>,
+}
+
+/// Individual batch operation
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub enum BatchOperation {
+    Put { key: Key, data: Vec<u8> },
+    Delete { key: Key },
+}
+
+/// Batch operation response
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct BatchResponse {
+    pub results: Vec<BatchResult>,
+}
+
+/// Result of individual batch operation
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub enum BatchResult {
+    Success,
+    Error(String),
+}
+
+/// Multipart upload state
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct MultipartUploadState {
+    pub upload_id: String,
+    pub bucket: BucketId,
+    pub key: Key,
+    pub parts: Vec<PartInfo>,
+    pub created_at: SystemTime,
+}
+
+/// Information about an uploaded part
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct PartInfo {
+    pub part_number: u32,
+    pub size: u64,
+    pub content_hash: ContentHash,
+}
+
+impl MultipartUploadState {
+    /// Create new multipart upload
+    pub fn new(upload_id: String, bucket: BucketId, key: Key) -> Self {
+        MultipartUploadState {
+            upload_id,
+            bucket,
+            key,
+            parts: Vec::new(),
+            created_at: SystemTime::now(),
+        }
+    }
+    
+    /// Add a part
+    pub fn add_part(&mut self, part_number: u32, size: u64, hash: ContentHash) {
+        self.parts.push(PartInfo {
+            part_number,
+            size,
+            content_hash: hash,
+        });
+        // Keep parts sorted by part number
+        self.parts.sort_by_key(|p| p.part_number);
+    }
+    
+    /// Get total size
+    pub fn total_size(&self) -> u64 {
+        self.parts.iter().map(|p| p.size).sum()
+    }
+    
+    /// Check if upload is complete
+    pub fn is_complete(&self) -> bool {
+        if self.parts.is_empty() {
+            return false;
+        }
+        
+        // Check that part numbers are sequential starting from 1
+        for (i, part) in self.parts.iter().enumerate() {
+            if part.part_number != (i as u32 + 1) {
+                return false;
+            }
+        }
+        
+        true
+    }
+}
+
 mod hex {
     use std::fmt::Write;
     

@@ -1,0 +1,40 @@
+[package]
+name = "wfldb-client"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+
+[dependencies]
+wfldb-core = { path = "../wfldb-core" }
+wfldb-net = { path = "../wfldb-net" }
+
+# HTTP client
+hyper = { workspace = true }
+hyper-util = { workspace = true }
+http-body-util = { workspace = true }
+tokio = { workspace = true }
+futures = { workspace = true }
+
+# Serialization
+serde = { workspace = true }
+serde_json = { workspace = true }
+flatbuffers = { workspace = true }
+
+# Error handling
+thiserror = { workspace = true }
+anyhow = { workspace = true }
+
+# Utilities
+bytes = "1.5"
+sha2 = "0.10"
+pin-project = "1.1"
+
+[dev-dependencies]
+tempfile = { workspace = true }
+proptest = { workspace = true }
+criterion = { workspace = true }
+wfldb-engine = { path = "../wfldb-engine" }
+wfldb-server = { path = "../wfldb-server" }

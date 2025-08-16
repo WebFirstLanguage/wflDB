@@ -35,7 +35,7 @@ impl StorageEngine {
     }
     
     /// Create temporary storage engine for testing
-    #[cfg(test)]
+    #[cfg(any(test, feature = "test-utils"))]
     pub fn temp() -> Result<(Self, tempfile::TempDir)> {
         let temp_dir = tempfile::tempdir()
             .map_err(|e| WflDBError::Internal(e.to_string()))?;
@@ -54,7 +54,7 @@ impl StorageEngine {
     }
     
     /// Get value separation threshold
-    pub(crate) fn value_threshold(&self) -> usize {
+    pub fn value_threshold(&self) -> usize {
         self.value_threshold
     }
     
