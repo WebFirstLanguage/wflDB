@@ -24,4 +24,28 @@ pub enum WflDBError {
     
     #[error("Internal error: {0}")]
     Internal(String),
+    
+    #[error("Authentication failed: {0}")]
+    AuthenticationFailed(String),
+    
+    #[error("Authorization failed: {0}")]
+    AuthorizationFailed(String),
+    
+    #[error("Invalid signature")]
+    InvalidSignature,
+    
+    #[error("Invalid key packet: {0}")]
+    InvalidKeyPacket(String),
+    
+    #[error("Expired key packet")]
+    ExpiredKeyPacket,
+    
+    #[error("Replay attack detected")]
+    ReplayAttack,
+    
+    #[error("Key revoked: {key_id}")]
+    KeyRevoked { key_id: String },
+    
+    #[error("Insufficient permissions")]
+    InsufficientPermissions,
 }

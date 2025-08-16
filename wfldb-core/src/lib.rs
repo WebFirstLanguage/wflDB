@@ -1,6 +1,7 @@
 //! Core data models and types for wflDB
 
 
+pub mod auth;
 pub mod error;
 pub mod types;
 

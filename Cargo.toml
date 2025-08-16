@@ -65,12 +65,3 @@ panic = "abort"
 [profile.bench]
 inherits = "release"
 debug = true
-
-[[bench]]
-name = "phase1_validation"
-harness = false
-
-[dependencies]
-wfldb-core = { path = "wfldb-core" }
-wfldb-engine = { path = "wfldb-engine", features = ["test-utils"] }
-criterion = { workspace = true }
