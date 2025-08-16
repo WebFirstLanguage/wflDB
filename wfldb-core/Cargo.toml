@@ -11,3 +11,7 @@ serde_json = { workspace = true }
 thiserror = { workspace = true }
 ulid = { version = "1.1", features = ["serde"] }
 blake3 = { workspace = true }
+
+[dev-dependencies]
+rand = "0.8"
+tokio = { workspace = true, features = ["rt", "time"] }

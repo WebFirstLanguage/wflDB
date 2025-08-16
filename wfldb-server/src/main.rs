@@ -6,9 +6,9 @@ use std::path::PathBuf;
 use tracing::{info, warn};
 use wfldb_engine::StorageEngine;
 
-mod simple_server;
+mod simple_server_fixed;
 
-use simple_server::SimpleServer;
+use simple_server_fixed::SimpleServer;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {

@@ -17,3 +17,4 @@ flatbuffers = { workspace = true }
 
 [dev-dependencies]
 criterion = { workspace = true }
+blake3 = { workspace = true }
