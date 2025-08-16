@@ -37,7 +37,7 @@ proptest! {
         let rt = tokio::runtime::Runtime::new().unwrap();
         rt.block_on(async {
             // Create test data from chunk sizes
-            let mut data = Vec::new();
+            let mut data: Vec<u8> = Vec::new();
             let mut chunks = Vec::new();
             
             for (i, size) in chunk_sizes.iter().enumerate() {
